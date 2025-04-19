@@ -162,6 +162,26 @@ const cli = meow(
     },
   },
 );
+// Override approval mode from environment if not specified via CLI flags
+{
+  const envMode = process.env['CODEX_APPROVAL_MODE'];
+  if (
+    envMode &&
+    !cli.flags.fullAuto &&
+    !cli.flags.autoEdit &&
+    !cli.flags.approvalMode
+  ) {
+    const validModes = ['suggest', 'auto-edit', 'full-auto'];
+    if (validModes.includes(envMode)) {
+      cli.flags.approvalMode = envMode;
+      if (envMode === 'full-auto') cli.flags.fullAuto = true;
+      if (envMode === 'auto-edit') cli.flags.autoEdit = true;
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn(`codex: ignoring invalid CODEX_APPROVAL_MODE='${envMode}'`);
+    }
+  }
+}
 
 // Handle 'completion' subcommand before any prompting or API calls
 if (cli.input[0] === "completion") {

@@ -39,9 +39,37 @@ class WorkerAgent(AgentBase):
         # Ensure codex is available
         try:
             # Pass the mission text as a single argument to codex
-            cmd = ['codex', mission_text]
+            # Run codex CLI in full-auto mode to avoid interactive approvals
+            cmd = ['codex', '--full-auto', mission_text]
             print(f'Invoking codex CLI: {cmd}', file=sys.stderr)
-            result = subprocess.run(cmd, cwd=base_out)
+            result = subprocess.run(cmd, cwd=base_out, capture_output=True, text=True)
+            # Log CLI command, stdout, stderr, and exit code for UI
+            try:
+                api_log_dir = os.path.join('progress', 'api_logs')
+                os.makedirs(api_log_dir, exist_ok=True)
+                log_path = os.path.join(api_log_dir, f'worker_{team_id}.json')
+                log_data = {
+                    'command': cmd,
+                    'stdout': result.stdout,
+                    'stderr': result.stderr,
+                    'exit_code': result.returncode
+                }
+                with open(log_path, 'w') as lf:
+                    json.dump(log_data, lf, indent=2)
+            except Exception:
+                pass
+            # Write worker progress summary
+            try:
+                progress_dir = os.path.join('progress')
+                os.makedirs(progress_dir, exist_ok=True)
+                progress_file = os.path.join(progress_dir, f'worker_{team_id}.md')
+                with open(progress_file, 'w') as pf:
+                    pf.write(f'# Worker Progress for {team_id}\n\n')
+                    pf.write(f'Mission:\n{mission_text}\n\n')
+                    pf.write(f'Exit code: {result.returncode}\n')
+                    pf.write(f'Output directory: {base_out}\n')
+            except Exception:
+                pass
             return result.returncode
         except FileNotFoundError:
             print('Error: codex CLI not found. Please install codex and ensure it is in PATH.', file=sys.stderr)

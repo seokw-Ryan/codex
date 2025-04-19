@@ -40,7 +40,7 @@ class ManagerAgent(AgentBase):
         # Prepare prompt
         system_msg = (
             'You are a Manager-level AI agent. Split the following team spec into logical, agile worker-level tasks. '
-            'Decide how many workers are needed. Output strictly a JSON array of objects with keys: '
+            'Decide how many workers are needed. The optimal development team size is from 3 to 9 workers/developers. Output strictly a JSON array of objects with keys: '
             '`worker_id` (unique slug), `mission` (detailed task description), '
             '`inputs` (list of required asset paths), `outputs` (list of files to produce).'
         )
@@ -48,18 +48,42 @@ class ManagerAgent(AgentBase):
             {'role': 'system', 'content': system_msg},
             {'role': 'user', 'content': f'Spec header YAML:\n{header_str}\nMission markdown:{body}'}
         ]
-        # Call OpenAI
         # Call OpenAI chat completion via new API
-        resp = client.chat.completions.create(
-            model=cfg.get('model'),
-            messages=messages,
-            max_tokens=cfg.get('max_tokens', 1500)
-        )
-        text = resp.choices[0].message.content.strip()
         try:
-            tasks = json.loads(text)
+            resp = client.chat.completions.create(
+                model=cfg.get('model'),
+                messages=messages,
+                max_tokens=cfg.get('max_tokens', 1500)
+            )
+        except Exception as e:
+            print(f'OpenAI API call failed: {e}', file=sys.stderr)
+            return 1
+        # Get the raw response content
+        text = resp.choices[0].message.content.strip()
+        # Log API prompt and response for UI
+        try:
+            api_log_dir = os.path.join('progress', 'api_logs')
+            os.makedirs(api_log_dir, exist_ok=True)
+            log_path = os.path.join(api_log_dir, f'manager_{team_id}.json')
+            with open(log_path, 'w') as lf:
+                json.dump({'messages': messages, 'response_text': text}, lf, indent=2)
+        except Exception:
+            pass
+        # Attempt to clean JSON by stripping code fences if present
+        clean_text = text
+        if clean_text.startswith("```") and clean_text.endswith("```"):
+            # Remove opening fence and optional language label
+            first_nl = clean_text.find('\n')
+            if first_nl != -1:
+                # Content between first newline after fence and closing fence
+                clean_text = clean_text[first_nl+1:-3].strip()
+            else:
+                clean_text = clean_text.strip('`').strip()
+        # Parse the JSON into tasks
+        try:
+            tasks = json.loads(clean_text)
         except json.JSONDecodeError:
-            print('Failed to parse JSON from OpenAI response:', text, file=sys.stderr)
+            print('Failed to parse JSON from OpenAI response:', clean_text, file=sys.stderr)
             return 1
         # Write worker specs
         specs_dir = 'specs'
@@ -87,4 +111,17 @@ class ManagerAgent(AgentBase):
                 wf.write(f'## Mission\n{mission}\n')
             with open(queue_file, 'a') as qf:
                 qf.write(spec_path + '\n')
+        # Write manager progress summary
+        try:
+            progress_dir = os.path.join('progress')
+            os.makedirs(progress_dir, exist_ok=True)
+            progress_file = os.path.join(progress_dir, f'manager_{team_id}.md')
+            with open(progress_file, 'w') as pf:
+                pf.write(f'# Manager Progress for team {team_id}\n\n')
+                pf.write('Generated worker specs:\n')
+                for task in tasks:
+                    wid = task.get('worker_id')
+                    pf.write(f'- {wid}: specs/{wid}.md\n')
+        except Exception:
+            pass
         return 0

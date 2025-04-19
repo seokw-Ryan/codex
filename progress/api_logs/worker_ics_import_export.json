@@ -1,0 +1,10 @@
+{
+  "command": [
+    "codex",
+    "--full-auto",
+    "## Mission\nDevelop the import/export features for ICS files using the 'ics' library."
+  ],
+  "stdout": "",
+  "stderr": "\nMissing OpenAI API key.\n\nSet the environment variable OPENAI_API_KEY and re-run this command.\nYou can create a key here: https://platform.openai.com/account/api-keys\n\n",
+  "exit_code": 1
+}

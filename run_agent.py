@@ -13,10 +13,14 @@ def main():
     args = parser.parse_args()
 
     if args.role == 'ceo':
-        if not args.prompt:
-            print('CEO role requires --prompt', file=sys.stderr)
+        # CEO can run in split mode (--prompt) or summary mode (--spec)
+        if args.spec:
+            agent = CEOAgent(spec_path=args.spec)
+        elif args.prompt:
+            agent = CEOAgent(prompt=args.prompt)
+        else:
+            print('CEO role requires --prompt or --spec', file=sys.stderr)
             sys.exit(1)
-        agent = CEOAgent(prompt=args.prompt)
     elif args.role == 'manager':
         if not args.spec:
             print('Manager role requires --spec', file=sys.stderr)
